@@ -1,0 +1,520 @@
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:kcca_kla_connect/config/base.dart';
+import 'package:kcca_kla_connect/reusables/constants.dart';
+import 'package:kcca_kla_connect/reusables/headedinput.dart';
+import 'package:kcca_kla_connect/views/home/myincidents.dart';
+import 'package:kcca_kla_connect/views/home/triphistory.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../reusables/text.dart';
+import 'home/engincidents.dart';
+import 'home/savelocation.dart';
+
+class ProfileSettings extends StatefulWidget {
+  const ProfileSettings({Key? key}) : super(key: key);
+
+  @override
+  State<ProfileSettings> createState() => _ProfileSettingsState();
+}
+
+class _ProfileSettingsState extends Base<ProfileSettings> {
+  TextEditingController? myprofile;
+  TextEditingController? homeController;
+  TextEditingController? workController;
+  TextEditingController? savedplace;
+  TextEditingController? frequent;
+  String _firstName = "";
+  String _lastName = "";
+  String _email = "";
+  String _userName = "";
+  String workAddress = "";
+  String homeAddress = "";
+  String savedPlaceAddress = "";
+  LatLng? homeCoords;
+  LatLng? workCoords;
+  LatLng? savedPlaceCoords;
+  bool? isEngineer;
+
+  get2() async {
+    const url = 'https://play.google.com/store/search?q=weyonje&c=apps';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url)); //forceWebView is true now
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
+  get1() async {
+    const url = 'https://play.google.com/store/apps/details?id=com.kcca.gis';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url)); //forceWebView is true now
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
+  get3() async {
+    const url =
+        'https://play.google.com/store/apps/details?id=com.manecommunityapp';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url)); //forceWebView is true now
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
+  get4() async {
+    const url = 'https://play.google.com/store/search?q=kcca+fc+app&c=apps';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url)); //forceWebView is true now
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
+  getSessionData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (prefs.getString("firstName") != null) {
+      setState(() {
+        _firstName = prefs.getString("firstName")!;
+      });
+    }
+    if (prefs.getString("lastName") != null) {
+      setState(() {
+        _lastName = prefs.getString("lastName")!;
+      });
+    }
+    if (prefs.getString("email") != null) {
+      setState(() {
+        _email = prefs.getString("email")!;
+      });
+    }
+    if (prefs.getString("userName") != null) {
+      setState(() {
+        _userName = prefs.getString("userName")!;
+      });
+    }
+  }
+
+  _checkIfEnge() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isEngineer = prefs.getBool("isengineer");
+    });
+  }
+
+  checkSavedAddresses() async {
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    if (preferences.getString("workaddress") != null &&
+        preferences.getString("workaddress") != "") {
+      setState(() {
+        workAddress = preferences.getString("workaddress")!;
+        workCoords = LatLng(double.tryParse(preferences.getString("worklat")!)!,
+            double.tryParse(preferences.getString("worklong")!)!);
+      });
+    }
+    if (preferences.getString("homeaddress") != null &&
+        preferences.getString("homeaddress") != "") {
+      setState(() {
+        homeAddress = preferences.getString("homeaddress")!;
+        homeCoords = LatLng(double.tryParse(preferences.getString("homelat")!)!,
+            double.tryParse(preferences.getString("homelong")!)!);
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    getSessionData();
+    checkSavedAddresses();
+    _checkIfEnge();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Container(
+          decoration: decorateIt,
+          height: MediaQuery.of(context).size.height * 1,
+          width: MediaQuery.of(context).size.width * 1,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 15,
+                    horizontal: 20,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Material(
+                        elevation: 9,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        child: GestureDetector(
+                          onTap: (() {
+                            Navigator.pop(context);
+                          }),
+                          child: Container(
+                            height: 40,
+                            width: 40,
+                            decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(20),
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color.fromRGBO(255, 255, 255, 1),
+                                    Color.fromRGBO(140, 139, 138, 0.8),
+                                  ],
+                                )),
+                            child: const Center(
+                              child: Icon(
+                                Icons.arrow_back_ios,
+                                size: 20,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      ReuseText(
+                        text: '$_firstName $_lastName',
+                        color: Colors.black,
+                        fWeight: FontWeight.w700,
+                        size: 20,
+                      ),
+                      const SizedBox(
+                        width: 30,
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          clearPrefs();
+                        },
+                        child: Material(
+                          borderRadius: BorderRadius.circular(20),
+                          elevation: 7,
+                          child: const CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Color.fromRGBO(217, 217, 217, 1),
+                            child: Icon(
+                              Icons.power_settings_new_rounded,
+                              color: Colors.red,
+                              size: 25,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(
+                  height: 30,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: HeadedInput(
+                        icons: Icons.person,
+                        iconcolor: Colors.grey,
+                        iconsize: 25,
+                        text: 'My profile ',
+                        size: 14,
+                        fWeight: FontWeight.w400,
+                        controller: myprofile,
+                        color: Colors.black,
+                        textt: '',
+                        textInputType: TextInputType.text,
+                        action: TextInputAction.next,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          push(const SaveLocation(locationType: "Home"));
+                        },
+                        child: HeadedInput(
+                          icons: Icons.house,
+                          iconcolor: Colors.green,
+                          iconsize: 25,
+                          text: 'Home',
+                          size: 14,
+                          fWeight: FontWeight.w400,
+                          controller: homeController,
+                          color: Colors.black,
+                          textt: homeAddress == ""
+                              ? "Set once and go"
+                              : homeAddress,
+                          textInputType: TextInputType.text,
+                          action: TextInputAction.next,
+                          hintcolor: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          push(const SaveLocation(locationType: "Work"));
+                        },
+                        child: HeadedInput(
+                          icons: Icons.work,
+                          iconcolor: const Color.fromRGBO(248, 221, 7, 1),
+                          iconsize: 25,
+                          text: 'Work',
+                          size: 14,
+                          fWeight: FontWeight.w400,
+                          controller: workController,
+                          color: Colors.black,
+                          textt: workAddress == ""
+                              ? "Set once and go"
+                              : workAddress,
+                          textInputType: TextInputType.text,
+                          action: TextInputAction.next,
+                          hintcolor: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          push(const TripHistory());
+                        },
+                        child: HeadedInput(
+                          icons: Icons.timelapse,
+                          iconcolor: Colors.black,
+                          iconsize: 25,
+                          text: 'Trip History',
+                          size: 14,
+                          fWeight: FontWeight.w400,
+                          controller: frequent,
+                          color: Colors.black,
+                          textt: '',
+                          textInputType: TextInputType.text,
+                          action: TextInputAction.next,
+                          hintcolor: Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          push(const MyIncidents());
+                        },
+                        child: HeadedInput(
+                          icons: Icons.zoom_in_map,
+                          iconcolor: Colors.black,
+                          iconsize: 25,
+                          text: 'My incidents',
+                          size: 14,
+                          fWeight: FontWeight.w400,
+                          controller: frequent,
+                          color: Colors.black,
+                          textt: '',
+                          textInputType: TextInputType.text,
+                          action: TextInputAction.next,
+                          hintcolor: Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          get1();
+                        },
+                        child: Card(
+                          elevation: 3,
+                          child: ListTile(
+                            dense: true,
+                            leading: SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: Image.asset("assets/images/KCCA.png"),
+                            ),
+                            title: const Text(
+                              "KCCA",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          get2();
+                        },
+                        child: Card(
+                          elevation: 3,
+                          child: ListTile(
+                            dense: true,
+                            leading: SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: Image.asset("assets/images/Weyonge.png"),
+                            ),
+                            title: const Text(
+                              "Weyonje",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          get3();
+                        },
+                        child: Card(
+                          elevation: 3,
+                          child: ListTile(
+                            dense: true,
+                            leading: SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: Image.asset("assets/images/Kas.png"),
+                            ),
+                            title: const Text(
+                              "Kampala Ambulance Service",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          get4();
+                          // await launchUrl(Uri.parse(
+                          //     'https://play.google.com/store/search?q=kcca+fc+app&c=apps'));
+                        },
+                        child: Card(
+                          elevation: 3,
+                          child: ListTile(
+                            dense: true,
+                            leading: SizedBox(
+                              height: 50,
+                              width: 50,
+                              child: Image.asset("assets/images/kccafc.png"),
+                            ),
+                            title: const Text(
+                              "KCCA FC",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+<<<<<<< HEAD
+                  ],
+                ),
+              ],
+            ),
+=======
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        push(const MyIncidents());
+                      },
+                      child: HeadedInput(
+                        icons: Icons.zoom_in_map,
+                        iconcolor: Colors.black,
+                        iconsize: 25,
+                        text: 'My incidents',
+                        size: 14,
+                        fWeight: FontWeight.w400,
+                        controller: frequent,
+                        color: Colors.black,
+                        textt: '',
+                        textInputType: TextInputType.text,
+                        action: TextInputAction.next,
+                        hintcolor: Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        push(const EngIncidents());
+                      },
+                      child: HeadedInput(
+                        icons: Icons.zoom_in_map,
+                        iconcolor: Colors.black,
+                        iconsize: 25,
+                        text: 'Incident Status',
+                        size: 14,
+                        fWeight: FontWeight.w400,
+                        controller: frequent,
+                        color: Colors.black,
+                        textt: '',
+                        textInputType: TextInputType.text,
+                        action: TextInputAction.next,
+                        hintcolor: Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+>>>>>>> 2844a8fe13f4a93a11857999665b9fe0952baba4
+          ),
+        ),
+      ),
+    );
+  }
+}

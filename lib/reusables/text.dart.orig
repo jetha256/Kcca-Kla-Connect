@@ -1,0 +1,51 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+class ReuseText extends StatelessWidget {
+  final String? text;
+  final FontWeight? fWeight;
+  final Color? color;
+  final double? size;
+  final FontStyle? fStyle;
+  final TextAlign? textAlign;
+<<<<<<< HEAD
+  final TextOverflow? textOverflow;
+  final int? maxLines;
+=======
+  final TextOverflow? overflow;
+>>>>>>> 2844a8fe13f4a93a11857999665b9fe0952baba4
+
+  const ReuseText(
+      {Key? key,
+      this.text,
+      this.fWeight,
+      this.color,
+      this.size,
+      this.fStyle,
+<<<<<<< HEAD
+      this.maxLines,
+      this.textOverflow,
+      this.textAlign = TextAlign.center})
+=======
+      this.textAlign = TextAlign.center,
+      this.overflow = TextOverflow.ellipsis})
+>>>>>>> 2844a8fe13f4a93a11857999665b9fe0952baba4
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text!,
+      maxLines: 5,
+      textAlign: textAlign,
+      style: GoogleFonts.lato(
+        textStyle: TextStyle(
+          color: color,
+          fontSize: size,
+          fontWeight: fWeight,
+          fontStyle: fStyle,
+        ),
+      ),
+    );
+  }
+}

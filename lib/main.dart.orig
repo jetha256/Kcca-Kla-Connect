@@ -1,0 +1,26 @@
+import 'package:flutter/material.dart';
+import 'package:kcca_kla_connect/views/home/home.dart';
+import 'package:kcca_kla_connect/views/profilesettings.dart';
+import 'package:kcca_kla_connect/views/searchdestination.dart';
+import 'package:kcca_kla_connect/views/splashscreen.dart';
+import 'package:kcca_kla_connect/views/todestination.dart';
+import 'package:kcca_kla_connect/views/welcome.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  // This widget is the root of your application.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const SplashScreen(),
+    );
+  }
+}

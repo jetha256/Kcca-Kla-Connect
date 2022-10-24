@@ -1,0 +1,778 @@
+import 'dart:convert';
+import 'dart:math';
+import 'dart:async';
+import 'package:kcca_kla_connect/views/botomnav.dart';
+import 'package:kcca_kla_connect/views/home/home.dart';
+import 'package:timeago/timeago.dart' as timeago;
+import 'package:flutter/material.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_place/google_place.dart';
+import 'package:kcca_kla_connect/reusables/button.dart';
+import 'package:kcca_kla_connect/reusables/text.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:http/http.dart' as http;
+import '../config/base.dart';
+import '../config/constants.dart';
+import '../config/functions.dart';
+import '../config/secrets.dart';
+import '../models/incident.dart';
+import '../reusables/constants.dart';
+import 'home/incidentpage.dart';
+
+class ToDestination extends StatefulWidget {
+  const ToDestination(
+      {Key? key, this.long, this.lati, this.location = "Destination"})
+      : super(key: key);
+  final double? long;
+  final double? lati;
+  final String? location;
+
+  @override
+  State<ToDestination> createState() => _ToDestinationState();
+}
+
+class _ToDestinationState extends Base<ToDestination> {
+  CameraPosition? _initialLocation = CameraPosition(target: LatLng(0.0, 0.0));
+  Completer<GoogleMapController> mapController = Completer();
+  List<AutocompletePrediction> predictionsFrom = [];
+  List<AutocompletePrediction> predictionsTo = [];
+  List<Incident> _incidentsNearMe = [];
+  List<AutocompletePrediction> predictionsDeparturePoint = [];
+  TextEditingController _travellingFromController = new TextEditingController();
+  TextEditingController _travellingToController = new TextEditingController();
+  String _travellingFromName = "", _travellingToName = "";
+  Future<List<Incident>>? _incidents;
+  GooglePlace? googlePlace;
+  bool getroute = false,
+      configureRoute = false,
+      transactiontype = false,
+      showPanel = false;
+  bool wallet = false, cash = false, mobile = false, card = false;
+  String? transtype;
+  int _value = 1;
+
+  Position? _currentPosition;
+  String _currentAddress = '';
+
+  final startAddressController = TextEditingController();
+  final destinationAddressController = TextEditingController();
+
+  final startAddressFocusNode = FocusNode();
+  final desrinationAddressFocusNode = FocusNode();
+
+  String _startAddress = '';
+  String _destinationAddress = '';
+  String? _placeDistance;
+  PanelController _panelControl = PanelController();
+
+  Set<Marker> markers = {};
+
+  PolylinePoints? polylinePoints;
+  Map<PolylineId, Polyline> polylines = {};
+  List<LatLng> polylineCoordinates = [];
+
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool _responseLoading = false;
+
+  _saveTrip() async {
+    var url = Uri.parse(AppConstants.baseUrl + "trips/register");
+    bool responseStatus = false;
+    String _authToken = "";
+    String _username = "";
+    String _password = "";
+    String _userId = "";
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    //Get username and password from shared prefs
+    _username = prefs.getString("email")!;
+    _password = prefs.getString("password")!;
+    _userId = prefs.getString("userid")!;
+
+    await AppFunctions.authenticate(_username, _password);
+    _authToken = prefs.getString("authToken")!;
+
+    setState(() {
+      _responseLoading = true;
+    });
+    var bodyString = {
+      "id": "string",
+      "startlat": _currentPosition!.latitude,
+      "startlong": _currentPosition!.longitude,
+      "startaddress": "",
+      "destinationaddress": widget.location,
+      "destinationlat": widget.lati,
+      "destinationlong": widget.long,
+      "datecreated": "2022-06-26T08:57:05.233Z",
+      "createdby": _userId,
+      "dateupdated": "2022-06-26T08:57:05.233Z",
+      "updatedby": "",
+      "status": "1"
+    };
+
+    var body = jsonEncode(bodyString);
+
+    var response = await http.post(
+      url,
+      headers: {
+        "Content-Type": "Application/json",
+        'Authorization': 'Bearer $_authToken',
+        body: body
+      },
+    );
+    print("THE RESPONSE IS ++++++" + response.body.toString() + "+++++++");
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final item = json.decode(response.body);
+
+      pushAndRemoveUntil(const HomePage());
+    } else {
+      setState(() {
+        _responseLoading = false;
+      });
+      showSnackBar("Registration Failure: Invalid data.");
+    }
+  }
+
+  //get incidents and filter those near me
+  Future<List<Incident>> getIncidents() async {
+    List<Incident> returnValue = [];
+    var url = Uri.parse(AppConstants.baseUrl + "incidents");
+    String _authToken = "";
+    String _username = "";
+    String _password = "";
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    //Get username and password from shared prefs
+    _username = prefs.getString("email")!;
+    _password = prefs.getString("password")!;
+
+    await AppFunctions.authenticate(_username, _password);
+    _authToken = prefs.getString("authToken")!;
+
+    var response = await http.get(
+      url,
+      headers: {
+        "Content-Type": "Application/json",
+        'Authorization': 'Bearer $_authToken',
+      },
+    );
+    print("++++++" + response.body.toString() + "+++++++");
+    if (response.statusCode == 200) {
+      final items = json.decode(response.body);
+      List<Incident> incidentsmodel =
+          (items as List).map((data) => Incident.fromJson(data)).toList();
+      var incidents = incidentsmodel;
+      returnValue = incidentsmodel;
+      setState(() {
+        _incidentsNearMe = incidentsmodel;
+      });
+      // Navigator.pushNamed(context, AppRouter.home);
+    } else {
+      returnValue = [];
+      // showSnackBar("Network Failure: Failed to retrieve transactions");
+    }
+    return returnValue;
+  }
+
+  // Future<bool> visiblePanel() async {
+  //   setState(() {
+  //     showPanel = true;
+  //   });
+  //   return showPanel;
+  // }
+
+  // // opens slide
+  // openSlideWidget() async {
+  //   await visiblePanel();
+  //   await _panelControl.open();
+  // }
+
+  // Method for retrieving the current location
+  Future<void> _getCurrentLocation() async {
+    final GoogleMapController controller = await mapController.future;
+    await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+        .then((Position position) async {
+      setState(() {
+        _currentPosition = position;
+        controller.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(position.latitude, position.longitude),
+              zoom: 18.0,
+            ),
+          ),
+        );
+      });
+      await _getAddress();
+    }).catchError((e) {
+      print(e);
+    });
+  }
+
+  // Method for retrieving the address
+  _getAddress() async {
+    try {
+      List<Placemark> p = await placemarkFromCoordinates(
+          _currentPosition!.latitude, _currentPosition!.longitude);
+
+      Placemark place = p[0];
+
+      setState(() {
+        _currentAddress =
+            "${place.name}, ${place.locality}, ${place.postalCode}, ${place.country}";
+        startAddressController.text = _currentAddress;
+        _startAddress = _currentAddress;
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  // Method for calculating the distance between two places
+  Future<bool> _calculateDistance() async {
+    final GoogleMapController controller = await mapController.future;
+    try {
+      // Use the retrieved coordinates of the current position,
+      // instead of the address if the start position is user's
+      // current position, as it results in better accuracy.
+      double startLatitude = _currentPosition!.latitude;
+
+      double startLongitude = _currentPosition!.longitude;
+
+      double destinationLatitude = widget.lati!;
+      double destinationLongitude = widget.long!;
+
+      String startCoordinatesString = '($startLatitude, $startLongitude)';
+      String destinationCoordinatesString =
+          '($destinationLatitude, $destinationLongitude)';
+
+      // Start Location Marker
+      Marker startMarker = Marker(
+        markerId: MarkerId(startCoordinatesString),
+        position: LatLng(startLatitude, startLongitude),
+        infoWindow: InfoWindow(
+          title: 'Start $startCoordinatesString',
+          snippet: _startAddress,
+        ),
+        icon: BitmapDescriptor.defaultMarker,
+      );
+
+      // Destination Location Marker
+      Marker destinationMarker = Marker(
+        markerId: MarkerId(destinationCoordinatesString),
+        position: LatLng(destinationLatitude, destinationLongitude),
+        infoWindow: InfoWindow(
+          title: 'Destination $destinationCoordinatesString',
+          snippet: _destinationAddress,
+        ),
+        icon: BitmapDescriptor.defaultMarker,
+      );
+
+      // Adding the markers to the list
+      markers.add(startMarker);
+      markers.add(destinationMarker);
+
+      // Calculating to check that the position relative
+      // to the frame, and pan & zoom the camera accordingly.
+      double miny = (startLatitude <= destinationLatitude)
+          ? startLatitude
+          : destinationLatitude;
+      double minx = (startLongitude <= destinationLongitude)
+          ? startLongitude
+          : destinationLongitude;
+      double maxy = (startLatitude <= destinationLatitude)
+          ? destinationLatitude
+          : startLatitude;
+      double maxx = (startLongitude <= destinationLongitude)
+          ? destinationLongitude
+          : startLongitude;
+
+      double southWestLatitude = miny;
+      double southWestLongitude = minx;
+
+      double northEastLatitude = maxy;
+      double northEastLongitude = maxx;
+
+      // Accommodate the two locations within the
+      // camera view of the map
+      controller.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            northeast: LatLng(northEastLatitude, northEastLongitude),
+            southwest: LatLng(southWestLatitude, southWestLongitude),
+          ),
+          100.0,
+        ),
+      );
+
+      // Calculating the distance between the start and the end positions
+      // with a straight path, without considering any route
+      double distanceInMeters = await Geolocator.bearingBetween(
+        startLatitude,
+        startLongitude,
+        destinationLatitude,
+        destinationLongitude,
+      );
+      print(distanceInMeters);
+
+      await _createPolylines(_currentPosition!.latitude,
+          _currentPosition!.longitude, widget.lati!, widget.long!);
+
+      double totalDistance = 0.0;
+
+      // Calculating the total distance by adding the distance
+      // between small segments
+      if (polylineCoordinates.length > 0) {
+        for (int i = 0; i < polylineCoordinates.length - 1; i++) {
+          print(destinationLatitude);
+          totalDistance += _coordinateDistance(
+            polylineCoordinates[i].latitude,
+            polylineCoordinates[i].longitude,
+            polylineCoordinates[i + 1].latitude,
+            polylineCoordinates[i + 1].longitude,
+          );
+          print('totalDistance');
+        }
+      } else {
+        print('polylineCoordinates are shit');
+      }
+
+      setState(() {
+        _placeDistance = totalDistance.toStringAsFixed(2);
+        print('DISTANCE: $_placeDistance km');
+      });
+
+      return true;
+    } catch (e) {
+      print(e);
+    }
+    return false;
+  }
+
+  // Formula for calculating distance between two coordinates
+  // https://stackoverflow.com/a/54138876/11910277
+  double _coordinateDistance(lat1, lon1, lat2, lon2) {
+    var p = 0.017453292519943295;
+    var c = cos;
+    var a = 0.5 -
+        c((lat2 - lat1) * p) / 2 +
+        c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
+    return 12742 * asin(sqrt(a));
+  }
+
+  // Create the polylines for showing the route between two places
+  _createPolylines(
+    double startLatitude,
+    double startLongitude,
+    double destinationLatitude,
+    double destinationLongitude,
+  ) async {
+    polylinePoints = PolylinePoints();
+    PolylineResult result = await polylinePoints!.getRouteBetweenCoordinates(
+      Secrets.API_KEY, // Google Maps API Key
+      PointLatLng(startLatitude, startLongitude),
+      PointLatLng(destinationLatitude, destinationLongitude),
+    );
+    // print(result.points);
+
+    if (result.points.isNotEmpty) {
+      result.points.forEach((PointLatLng point) {
+        polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+        // print(polylineCoordinates);
+      });
+    } else {
+      print('No polyline coordinates');
+    }
+
+    PolylineId id = PolylineId('poly');
+    Polyline polyline = Polyline(
+      polylineId: id,
+      color: Colors.red,
+      points: polylineCoordinates,
+      width: 3,
+    );
+    polylines[id] = polyline;
+    // _saveTrip();
+  }
+
+  Future<void> requestLocationPermission() async {
+    final serviceStatusLocation = await Permission.locationWhenInUse.isGranted;
+
+    bool isLocation = serviceStatusLocation == goil;
+
+    final status = await Permission.locationWhenInUse.request();
+
+    if (status == PermissionStatus.granted) {
+      print('Permission Granted');
+    } else if (status == PermissionStatus.denied) {
+      print('Permission denied');
+    } else if (status == PermissionStatus.permanentlyDenied) {
+      print('Permission Permanently Denied');
+      await openAppSettings();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    googlePlace = GooglePlace("AIzaSyAdhUesROehQ0accS8FuBXYqnrMsd0IuCM");
+    requestLocationPermission()
+        .then((value) => _getCurrentLocation().then((value) {
+              _calculateDistance();
+              print(_currentPosition!.longitude);
+              print(widget.lati!);
+            }));
+    _incidents = getIncidents();
+  }
+
+  Future<LatLng> _getCoordinates(String query) async {
+    var addresses = await locationFromAddress("Gronausestraat 710, Enschede");
+    // var first = addresses.;
+    print("${addresses.first.latitude} : ${addresses.first.longitude}");
+
+    return LatLng(addresses.first.latitude, addresses.first.longitude);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var height = MediaQuery.of(context).size.height;
+    var width = MediaQuery.of(context).size.width;
+    return SafeArea(
+        child: Container(
+      decoration: decorateIt,
+      height: MediaQuery.of(context).size.height * 1,
+      width: MediaQuery.of(context).size.width * 1,
+      child: Scaffold(
+        key: _scaffoldKey,
+        body: SlidingUpPanel(
+          color: const Color.fromRGBO(237, 237, 237, 1),
+          maxHeight: 370,
+          controller: _panelControl,
+          backdropOpacity: 0.2,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(30),
+            topRight: Radius.circular(30),
+          ),
+          minHeight: 100,
+          panel: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 20),
+              Container(
+                width: 100,
+                height: 3,
+                color: Colors.grey,
+              ),
+              const SizedBox(height: 10),
+              Container(
+                color: Colors.white,
+                height: 50,
+                width: MediaQuery.of(context).size.width * .9,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    const SizedBox(
+                      width: 10,
+                    ),
+                    SizedBox(
+                      height: 50,
+                      width: MediaQuery.of(context).size.width * .6,
+                      child: Center(
+                        child: ReuseText(
+                          text: 'To ${widget.location}',
+                          size: 17,
+                          fWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        pushAndRemoveUntil(const BottomNav());
+                      },
+                      child: const ReuseButton(
+                        radius: 15,
+                        color: Color.fromRGBO(237, 30, 36, 1),
+                        width: 70,
+                        height: 40,
+                        child: ReuseText(
+                          text: 'Stop',
+                          size: 20,
+                          color: Colors.white,
+                          fWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+              Padding(
+                padding: EdgeInsets.only(
+                    left: MediaQuery.of(context).size.width * .1),
+                child: Row(
+                  children: const [
+                    ReuseText(
+                      text: 'Reported incidents on this route',
+                      size: 14,
+                      fWeight: FontWeight.w700,
+                    ),
+                  ],
+                ),
+              ),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * .3,
+                  minHeight: 200,
+                ),
+                child: FutureBuilder<List<dynamic>>(
+                  future: _incidents,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      if (snapshot.data!.length > 0) {
+                        return ListView.builder(
+                          padding: EdgeInsets.all(8),
+                          scrollDirection: Axis.vertical,
+                          itemCount: snapshot.data!.length,
+                          itemBuilder: (BuildContext ctxt, int index) {
+                            return GestureDetector(
+                              onTap: () {
+                                push(IncidentPage(
+                                    incident: snapshot.data![index]));
+                              },
+                              child: Container(
+                                height: 120,
+                                child: Card(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  color: const Color(0xffffffff),
+                                  child: Stack(
+                                    children: [
+                                      Positioned(
+                                        bottom: 15,
+                                        left: 10,
+                                        child: Container(
+                                          // height: 25,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 15, vertical: 10),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                snapshot.data![index].name
+                                                    .toString()
+                                                    .toUpperCase(),
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 18,
+                                                    color: Colors.black,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                              Text(
+                                                snapshot.data![index].address,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
+                                              ),
+                                              const Divider(
+                                                thickness: 1,
+                                              ),
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    snapshot.data![index]
+                                                        .incidentcategory,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.black,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    timeago.format(
+                                                        snapshot.data![index]
+                                                            .datecreated,
+                                                        locale: 'en_short'),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.black,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      } else {
+                        return Container(
+                          child: Text("No nearby incidents"),
+                        );
+                      }
+                    } else {
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppConstants.primaryColor),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                  },
+                ),
+              )
+            ],
+          ),
+          body: SizedBox(
+            height: MediaQuery.of(context).size.height * 1,
+            width: MediaQuery.of(context).size.width * 1,
+            child: Stack(
+              children: <Widget>[
+                // Map View
+                GoogleMap(
+                  markers: Set<Marker>.from(markers),
+                  initialCameraPosition: _initialLocation!,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  mapType: MapType.normal,
+                  zoomGesturesEnabled: true,
+                  zoomControlsEnabled: false,
+                  polylines: Set<Polyline>.of(polylines.values),
+                  onMapCreated: (GoogleMapController controller) {
+                    mapController.complete(controller);
+                  },
+                ),
+                // Show zoom buttons
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        ClipOval(
+                          child: Material(
+                            color: Colors.blue.shade100, // button color
+                            child: InkWell(
+                              splashColor: Colors.blue, // inkwell color
+                              child: SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: Icon(Icons.add),
+                              ),
+                              onTap: () async {
+                                final GoogleMapController controller =
+                                    await mapController.future;
+                                controller.animateCamera(
+                                  CameraUpdate.zoomIn(),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        ClipOval(
+                          child: Material(
+                            color: Colors.blue.shade100, // button color
+                            child: InkWell(
+                              splashColor: Colors.blue, // inkwell color
+                              child: SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: Icon(Icons.remove),
+                              ),
+                              onTap: () async {
+                                final GoogleMapController controller =
+                                    await mapController.future;
+                                controller.animateCamera(
+                                  CameraUpdate.zoomIn(),
+                                );
+                              },
+                            ),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Show current location button
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.bottomRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 10.0, bottom: 10.0),
+                      child: ClipOval(
+                        child: Material(
+                          color: Colors.orange.shade100, // button color
+                          child: InkWell(
+                            splashColor: Colors.orange, // inkwell color
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: Icon(Icons.my_location),
+                            ),
+                            onTap: () async {
+                              final GoogleMapController controller =
+                                  await mapController.future;
+                              controller.animateCamera(
+                                CameraUpdate.newCameraPosition(
+                                  CameraPosition(
+                                    target: LatLng(
+                                      _currentPosition!.latitude,
+                                      _currentPosition!.longitude,
+                                    ),
+                                    zoom: 18.0,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ));
+  }
+}
